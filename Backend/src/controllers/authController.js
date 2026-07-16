@@ -74,7 +74,7 @@ const login = async (req,res) => {
 
         process.env.JWT_SECRET,
         {
-            expiresIn: process.env.JWR_EXPIRES
+            expiresIn: process.env.JWT_EXPIRES
         }
     )
     const option = {
@@ -98,7 +98,15 @@ const login = async (req,res) => {
     });
 }
 
+const getProfile = async (req,res) => {
+    return res.status(200).json({
+        success: true,
+        existUser: req.user
+    })
+}
+
 module.exports = {
     registerUser,
     login,
+    getProfile,
 }
