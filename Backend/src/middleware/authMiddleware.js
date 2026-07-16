@@ -26,6 +26,18 @@ req.user = currentUser;
   }
 };
 
+const isAdmin = async (req,res,next) => {
+    req.user = currentUser
+    if(req.user.role !== "admin"){
+        return res.status(403).json({
+            success: false,
+            message: "Access Denied"
+        })
+    }
+    next()
+}
+
 module.exports = {
-    isAuthenticated
+    isAuthenticated,
+    isAdmin
 };
