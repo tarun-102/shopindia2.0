@@ -2,17 +2,25 @@ const jwt = require("jsonwebtoken");
 const user = require("../models/userModel")
 const isAuthenticated = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    const accesstoken = req.cookies.accessToken;
 
-    if (!token) {
+    if (!accesstoken) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized. Please login.",
       });
     }
     
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(accesstoken, process.env.ACCESS_TOKEN_SECRET);
+
    const currentUser = await user.findById(decoded.id);
+
+   if (!currentUser) {
+    return res.status(401).json({
+        success: false,
+        message: "User not found",
+    });
+}
 
 req.user = currentUser;
     next();
@@ -27,7 +35,6 @@ req.user = currentUser;
 };
 
 const isAdmin = async (req,res,next) => {
-    req.user = currentUser
     if(req.user.role !== "admin"){
         return res.status(403).json({
             success: false,
