@@ -2,23 +2,19 @@ const user = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const { generateAccessToken, generateRefreshToken } = require("../utils/token");
 const jwt = require("jsonwebtoken");
+const asyncHandler = require("../middleware/asyncHandler");
+const ApiError = require("../utils/Apierror");
 
-const registerUser = async (req, res) => {
+const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "api feild required",
-    });
+   throw new ApiError(400, "All feild required")
   }
   const existUser = await user.findOne({ email });
 
   if (existUser) {
-    return res.status(409).json({
-      success: false,
-      message: "User already exists",
-    });
+   throw new ApiError(400, "user sllreadt exist")
   }
 
   const hashPassword = await bcrypt.hash(password, 10);
@@ -33,16 +29,13 @@ const registerUser = async (req, res) => {
     success: true,
     message: "user register successfully",
   });
-};
+});
 
-const login = async (req, res) => {
+const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "Email and password are required",
-    });
+    throw new ApiError(400, "Email and password are required")
   }
 
   const existUser = await user
@@ -50,19 +43,13 @@ const login = async (req, res) => {
     .select("+password +refreshToken");
 
   if (!existUser) {
-    return res.status(404).json({
-      success: false,
-      message: "invaild email or password",
-    });
+    throw new ApiError(404, "user not register")
   }
 
   const isPasswordmatch = await bcrypt.compare(password, existUser.password);
 
   if (!isPasswordmatch) {
-    return res.status(401).json({
-      success: false,
-      message: "invaild email or password",
-    });
+    throw new ApiError(401,"invalid email or password")
   }
 
   const accessToken = generateAccessToken(existUser);
@@ -101,93 +88,77 @@ const login = async (req, res) => {
         role: existUser.role,
       },
     });
-};
+});
 
-const refreshToken = async (req, res) => {
-  try {
-    const incomingRefreshToken = req.cookies.refreshToken;
+const refreshToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken;
 
-    //chekc token exist
-    if (!incomingRefreshToken) {
-      return res.status(401).json({
-        success: false,
-        message: "refresh token missing",
-      });
-    }
-
-    const decoded = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET,
-    );
-    const existUser = await user.findById(decoded.id).select("+refreshToken");
-
-    if (!existUser) {
-      return res.status(404).json({
-        success: false,
-        message: "user not found",
-      });
-    }
-    const isRefreshTokenMatch = await bcrypt.compare(
-      incomingRefreshToken,
-      existUser.refreshToken,
-    );
-
-    if (!isRefreshTokenMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "invalid refresh token",
-      });
-    }
-
-    const newAccessToken = generateAccessToken(existUser);
-    const newRefreshToken = generateRefreshToken(existUser);
-
-    const hashNewRefreshToken = await bcrypt.hash(newRefreshToken, 10);
-
-    existUser.refreshToken = hashNewRefreshToken;
-
-    await existUser.save({
-      validateBeforeSave: false,
-    });
-
-    const accessOptions = {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: 15 * 60 * 1000,
-    };
-
-    const refreshOptions = {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    };
-
-    return res
-      .cookie("accessToken", newAccessToken, accessOptions)
-      .cookie("refreshToken", newRefreshToken, refreshOptions)
-      .status(200)
-      .json({
-        success: true,
-        message: "token rereshed successfullly",
-      });
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "invalid or expire refresh token",
-    });
+  //chekc token exist
+  if (!incomingRefreshToken) {
+   throw new ApiError(401, "missing refresh token")
   }
-};
 
-const getProfile = async (req, res) => {
+  const decoded = jwt.verify(
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET,
+  );
+  const existUser = await user.findById(decoded.id).select("+refreshToken");
+
+  if (!existUser) {
+    throw new ApiError(404, "user not found")
+  }
+  const isRefreshTokenMatch = await bcrypt.compare(
+    incomingRefreshToken,
+    existUser.refreshToken,
+  );
+
+  if (!isRefreshTokenMatch) {
+    throw new ApiError(401, "invalid refresh token")
+  }
+
+  const newAccessToken = generateAccessToken(existUser);
+  const newRefreshToken = generateRefreshToken(existUser);
+
+  const hashNewRefreshToken = await bcrypt.hash(newRefreshToken, 10);
+
+  existUser.refreshToken = hashNewRefreshToken;
+
+  await existUser.save({
+    validateBeforeSave: false,
+  });
+
+  const accessOptions = {
+    httpOnly: true,
+    secure: false,
+    sameSite: "strict",
+    maxAge: 15 * 60 * 1000,
+  };
+
+  const refreshOptions = {
+    httpOnly: true,
+    secure: false,
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+
+  return res
+    .cookie("accessToken", newAccessToken, accessOptions)
+    .cookie("refreshToken", newRefreshToken, refreshOptions)
+    .status(200)
+    .json({
+      success: true,
+      message: "token rereshed successfullly",
+    });
+});
+
+const getProfile = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     existUser: req.user,
   });
-};
+});
 
-const logout = async (req, res) => {
+const logout = asyncHandler(async (req,res) => {
   const existUser = req.user;
 
   existUser.refreshToken = undefined;
@@ -213,7 +184,7 @@ const logout = async (req, res) => {
     success: true,
     message: "Logout successful",
   });
-};
+});
 
 module.exports = {
   registerUser,
